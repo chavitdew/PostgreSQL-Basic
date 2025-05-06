@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	_ "github.com/lib/pq"
@@ -52,5 +53,74 @@ func main() {
 	app.Get("/hello", func(c *fiber.Ctx) error {
 		return c.SendString("Hello World!")
 	})
+	app.Get("/products/:id", getProductHandler)
+	app.Get("/products/", getProductsHandler)
+	app.Post("/products/", createProductHandler)
+	app.Put("/products/:id", updateProductHandler)
+	app.Delete("/products/:id", deleteProductHandler)
 	app.Listen(":8080")
+}
+
+func getProductHandler(c *fiber.Ctx) error {
+	productId, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid product ID")
+	}
+	product, err := getProduct(productId)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).SendString("Product Not Found")
+	}
+	return c.JSON(product)
+}
+
+func getProductsHandler(c *fiber.Ctx) error {
+	products, err := getProducts()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Failed to fetch products")
+	}
+	return c.JSON(products)
+}
+
+func createProductHandler(c *fiber.Ctx) error {
+	p := new(Product)
+	if err := c.BodyParser(p); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
+	}
+
+	if p.Name == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid product data")
+	}
+
+	err := createProduct(p)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Failed to create product")
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(p)
+}
+
+func updateProductHandler(c *fiber.Ctx) error {
+	productId, err := strconv.Atoi(c.Params("id"))
+	p := new(Product)
+	if err := c.BodyParser(p); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
+	}
+
+	product, err := updateProduct(productId, p)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).SendString("Product Not Found")
+	}
+	return c.JSON(product)
+}
+
+func deleteProductHandler(c *fiber.Ctx) error {
+	productId, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid product ID")
+	}
+	err = deleteProduct(productId)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Failed to delete product")
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
